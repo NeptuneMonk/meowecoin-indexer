@@ -149,6 +149,7 @@ export class Store {
     mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
     this.db.exec('PRAGMA journal_mode = WAL;');
+    this.db.exec('PRAGMA synchronous = NORMAL;');
     this.db.exec(SCHEMA);
   }
 
@@ -223,6 +224,33 @@ export class Store {
     const touched = new Set<string>();
     for (const root of roots) {
       for (const output of root.outputs) touched.add(output.address);
+    }
+    for (const address of touched) this.recompute(address);
+  }
+
+  /**
+   * Save a contiguous run of blocks in one commit.
+   * A crash rolls the whole run back, and the next start continues from the last commit.
+   */
+  saveBlocks(blocks: Array<{ height: number; hash: string; prevHash: string | null; time: number; roots: DecodedRoot[] }>): void {
+    if (blocks.length === 0) return;
+    const insertBlock = this.db.prepare('INSERT INTO blocks(height, hash, prev_hash, time) VALUES(?, ?, ?, ?)');
+    this.db.exec('BEGIN');
+    try {
+      for (const block of blocks) {
+        insertBlock.run(block.height, block.hash, block.prevHash, block.time);
+        for (const root of block.roots) this.insertRoot(root);
+      }
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+    const touched = new Set<string>();
+    for (const block of blocks) {
+      for (const root of block.roots) {
+        for (const output of root.outputs) touched.add(output.address);
+      }
     }
     for (const address of touched) this.recompute(address);
   }

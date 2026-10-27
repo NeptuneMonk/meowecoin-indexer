@@ -7,6 +7,8 @@ import { createApi, listen } from '../src/api/server.ts';
 import type { Config } from '../src/config.ts';
 import { Store } from '../src/db/store.ts';
 import { syncOnce } from '../src/indexer/scan.ts';
+import { decodeBase58Check } from '../src/p2fk/base58.ts';
+import { serializeBlockHex } from '../src/p2fk/blockHex.ts';
 import { buildRootTransaction, encodeFile, encodeMessage } from '../src/p2fk/encode.ts';
 import type { ChainTransaction } from '../src/p2fk/types.ts';
 import type { BlockInfo, BlockchainRpc } from '../src/rpc/client.ts';
@@ -196,3 +198,133 @@ test('scan loop resumes, serves the API, and drops a reorged root', async () => 
   resumed.close();
   assert.ok(chain.verified > 0);
 });
+
+test('genesis scan uses block hex, resumes, and reports a speed', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'meowe-genesis-'));
+  const dbPath = join(directory, 'index.sqlite');
+  const chain = new HexChain();
+  const obj = Buffer.from(JSON.stringify({ urn: 'genesis-coin', nme: 'Genesis Coin', cre: ['0'], own: { '0': 1 }, max: 1 }));
+  const built = buildRootTransaction({
+    txid: 'cd'.repeat(32),
+    versionByte: 30,
+    keywords: ['genesis-coin'],
+    body: Buffer.concat([
+      encodeFile('SIG', Buffer.from(Array.from({ length: 88 }, (_, index) => (index * 23 + 3) % 250 + 1))),
+      encodeFile('OBJ', obj),
+    ]),
+  });
+  const rootOutputs = built.tx.outputs.map((output) => ({
+    hash160: decodeBase58Check(output.address).subarray(1, 21),
+    sats: output.sats,
+  }));
+  const payment = [{ hash160: Buffer.alloc(20, 2), sats: 5_000_000_000n }];
+  chain.add(0, '00'.repeat(32), 1_383_465_000, [payment]);
+  chain.add(1, chain.block(0).hash, 1_383_465_060, [payment, rootOutputs]);
+  chain.add(2, chain.block(1).hash, 1_383_465_120, [payment]);
+
+  const store = new Store(dbPath, 30);
+  const appConfig = config(dbPath, 0);
+  appConfig.startHeight = 0;
+  appConfig.batchBlocks = 1;
+  const first = await syncOnce(chain, store, appConfig);
+  assert.equal(first.indexedHeight, 0);
+  assert.equal(first.blocksRead, 1);
+
+  const server = createApi(chain, store, appConfig);
+  await listen(server, appConfig);
+  const address = server.address();
+  const port = typeof address === 'object' && address ? address.port : 0;
+  try {
+    const health = (await (await fetch(`http://127.0.0.1:${port}/health`)).json()) as {
+      indexedHeight: number;
+      nodeHeight: number;
+      startHeight: number;
+      blocksBehind: number;
+      blocksPerSecond: number;
+      averageBlocksPerSecond: number;
+      etaSeconds: number;
+    };
+    assert.equal(health.startHeight, 0);
+    assert.equal(health.indexedHeight, 0);
+    assert.equal(health.nodeHeight, 2);
+    assert.equal(health.blocksBehind, 2);
+    assert.ok(health.blocksPerSecond > 0);
+    assert.ok(health.averageBlocksPerSecond > 0);
+    assert.equal(typeof health.etaSeconds, 'number');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+
+  appConfig.batchBlocks = 10;
+  const rest = await syncOnce(chain, store, appConfig);
+  assert.equal(rest.indexedHeight, 2);
+  assert.equal(store.getObject(built.signerAddress)?.name, 'Genesis Coin');
+  store.close();
+
+  const resumed = new Store(dbPath, 30);
+  chain.add(3, chain.block(2).hash, 1_383_465_180, [payment]);
+  const continued = await syncOnce(chain, resumed, appConfig);
+  assert.equal(continued.blocksRead, 1);
+  assert.equal(continued.indexedHeight, 3);
+  assert.equal(resumed.getObject(built.signerAddress)?.name, 'Genesis Coin');
+
+  const replacement = chain.block(0);
+  chain.blocks = chain.blocks.filter((block) => block.height === 0);
+  chain.add(1, replacement.hash, 1_383_465_061, [payment]);
+  const reorg = await syncOnce(chain, resumed, appConfig);
+  assert.equal(reorg.reorged, true);
+  assert.equal(resumed.getObject(built.signerAddress), null);
+  resumed.close();
+  assert.ok(chain.verified > 0);
+});
+
+class HexChain implements BlockchainRpc {
+  blocks: Array<{ height: number; hash: string; previous: string; time: number; hex: string }> = [];
+  verified = 0;
+
+  add(height: number, previous: string, time: number, outputs: Array<Array<{ hash160: Buffer; sats: bigint }>>): void {
+    const built = serializeBlockHex({ previousHash: previous, time, nonce: height + 1, pubkeyVersion: 30, outputs });
+    this.blocks.push({ height, hash: built.hash, previous, time, hex: built.hex });
+  }
+
+  block(height: number): { height: number; hash: string; previous: string; time: number; hex: string } {
+    const found = this.blocks.find((item) => item.height === height);
+    if (!found) throw new Error(`no block ${height}`);
+    return found;
+  }
+
+  getBlockCount(): Promise<number> {
+    return Promise.resolve(Math.max(...this.blocks.map((block) => block.height)));
+  }
+
+  async getBlockHash(height: number): Promise<string> {
+    return this.block(height).hash;
+  }
+
+  getBlockHashBatch(heights: number[]): Promise<string[]> {
+    return Promise.resolve(heights.map((height) => this.block(height).hash));
+  }
+
+  getBlockHexBatch(hashes: string[]): Promise<string[]> {
+    return Promise.resolve(
+      hashes.map((hash) => {
+        const found = this.blocks.find((block) => block.hash === hash);
+        if (!found) throw new Error(`missing ${hash}`);
+        return found.hex;
+      }),
+    );
+  }
+
+  getBlock(): Promise<BlockInfo> {
+    return Promise.reject(new Error('hex path does not call getblock verbose'));
+  }
+
+  getRawTransaction(): Promise<ChainTransaction> {
+    return Promise.reject(new Error('hex path does not call getrawtransaction'));
+  }
+
+  verifyMessage(): Promise<boolean> {
+    this.verified += 1;
+    return Promise.resolve(true);
+  }
+}

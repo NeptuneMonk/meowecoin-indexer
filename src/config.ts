@@ -51,7 +51,7 @@ export function loadConfig(envPath = resolve(process.cwd(), '.env')): Config {
   if (versionByte < 0 || versionByte > 255) {
     throw new Error('VERSION_BYTE must be from 0 to 255.');
   }
-  const startHeight = intEnv('START_HEIGHT', 6_400_000);
+  const startHeight = intEnv('START_HEIGHT', 0);
   if (startHeight < 0) throw new Error('START_HEIGHT cannot be negative.');
   return {
     rpcUrl: process.env.DOGE_RPC_URL?.trim() || 'http://127.0.0.1:22555',
@@ -64,6 +64,6 @@ export function loadConfig(envPath = resolve(process.cwd(), '.env')): Config {
     dbPath: resolve(process.env.DB_PATH?.trim() || './data/meowecoin-indexer.sqlite'),
     versionByte,
     pollMs: intEnv('POLL_MS', 15_000),
-    batchBlocks: Math.max(1, intEnv('BATCH_BLOCKS', 20)),
+    batchBlocks: Math.max(1, intEnv('BATCH_BLOCKS', 200)),
   };
 }

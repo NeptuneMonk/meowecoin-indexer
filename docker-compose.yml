@@ -9,7 +9,7 @@ services:
       DOGE_RPC_URL: ${DOGE_RPC_URL:-http://host.docker.internal:22555}
       DOGE_RPC_USER: ${DOGE_RPC_USER:-meowe}
       DOGE_RPC_PASSWORD: ${DOGE_RPC_PASSWORD:-change-this-password}
-      START_HEIGHT: ${START_HEIGHT:-6400000}
+      START_HEIGHT: ${START_HEIGHT:-0}
       # Inside the container the API must listen on every interface.
       # The ports line below still only opens it on this computer.
       BIND_HOST: 0.0.0.0
@@ -18,7 +18,7 @@ services:
       DB_PATH: /app/data/meowecoin-indexer.sqlite
       VERSION_BYTE: ${VERSION_BYTE:-30}
       POLL_MS: ${POLL_MS:-15000}
-      BATCH_BLOCKS: ${BATCH_BLOCKS:-20}
+      BATCH_BLOCKS: ${BATCH_BLOCKS:-200}
     ports:
       - "127.0.0.1:${PORT:-8080}:${PORT:-8080}"
     volumes:

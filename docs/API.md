@@ -40,9 +40,12 @@ Message routes default to `qty=10`.
   "chain": "DOG",
   "versionByte": 30,
   "nodeHeight": 6431700,
-  "indexedHeight": 6400100,
-  "startHeight": 6400000,
-  "blocksBehind": 31600,
+  "indexedHeight": 120000,
+  "startHeight": 0,
+  "blocksBehind": 6311700,
+  "blocksPerSecond": 40.5,
+  "averageBlocksPerSecond": 36.2,
+  "etaSeconds": 155844,
   "waitingForStartHeight": false,
   "rootCount": 0,
   "objectCount": 0,
@@ -54,6 +57,8 @@ Message routes default to `qty=10`.
 ```
 
 `ok` is false and `rpc` is `"error"` when the node does not answer. `rpcError` is the message. `indexedHeight` is null until the first block is saved.
+
+`startHeight` is the configured first block. The default is `0`. `blocksPerSecond` is the speed of the latest batch while the index is behind the node, and `0` once it has caught up. `averageBlocksPerSecond` is the speed since this process started reading. `etaSeconds` is `blocksBehind / blocksPerSecond`, rounded. It is null until a speed is known, and null again when nothing is left to read. The guess follows the latest speed, so a slow disk or a stretch of large blocks changes it.
 
 ## Keyword helpers
 

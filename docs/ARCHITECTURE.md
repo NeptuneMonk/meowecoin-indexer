@@ -25,11 +25,19 @@ A real Bitcoin transaction checked the decoder: `e2a5e084e08c468f94c463211dd79b0
 
 ## Scan
 
-`src/indexer/scan.ts` asks the node for the tip, then reads blocks from `START_HEIGHT` (default `6400000`, early October 2026) up to the tip, `BATCH_BLOCKS` at a time (default 20). It sleeps `POLL_MS` (default 15 seconds) and repeats.
+`src/indexer/scan.ts` asks the node for the tip, then reads blocks from `START_HEIGHT` through the tip. The default is `0`, the genesis block. A higher `START_HEIGHT` is an optional override that skips older blocks. `BATCH_BLOCKS` (default 200) is how many blocks are committed at a time, not a stopping point.
+
+While `indexedHeight` is behind the tip, the loop does not sleep. After it catches up it waits `POLL_MS` (default 15 seconds) and checks for new blocks.
+
+Dogecoin Core 1.14 `getblock` cannot return outputs and ids together. The fast path batches `getblockhash`, then batches `getblock` with verbose false (raw hex, 8 blocks per HTTP call), and parses the outputs locally in `src/p2fk/blockHex.ts`. Transactions with no dust output are ignored before the P2FK decoder runs. `verifymessage` still goes to the node, and only for a decoded root. The fallback path, used when the RPC client has no hex batch, still calls `getrawtransaction` per transaction.
+
+A run of blocks is committed together. A crash rolls that run back. Restart continues from `MAX(blocks.height)`. SQLite uses WAL and `synchronous = NORMAL` because the file can be rebuilt from the node.
+
+`/health` and the log show indexed height, node height, blocks per second for the last batch, the average since this process started, and a rough remaining time from the last speed. The rate resets when the process restarts. The saved height does not.
 
 Confirmed blocks only. The mempool is not indexed.
 
-Each block is saved only after every transaction in it has been decoded. A crash in the middle of a block reads that block again. Restart continues from the highest saved block height.
+Dogecoin mainnet is a bit over 6 million blocks. One block read each, at a laptop RPC pace of tens of milliseconds, is many hours and can run past a day. That is a bound from the block count, not a timed run on the owner's machine.
 
 `txindex=1` is required. `getrawtransaction` must return transactions that are not in the wallet.
 
@@ -138,10 +146,10 @@ These are the places this version does not claim to match Sup byte for byte, or 
 5. Object-by-URN uses Sup's 3-year change-date window. Address lookup does not.
 6. `max` is updated only when the JSON key is present. Sup's omitted `long` becomes 0.
 7. The mempool is not indexed. A record appears after it is in a block.
-8. Scanning from height 0 is a full chain read and is slow.
+8. The default scan starts at genesis and reads every block once. Stopping and starting again is safe. A faster disk finishes sooner. The remaining-time number is the latest blocks/sec, so it moves around.
 9. Dogecoin Core must stay on 1.14.6 so output order is stable.
 10. Duplicate 20-byte chunks cannot appear in one Sup transaction. A root with a repeated payload address is skipped.
 11. `GetObjectsByAddress` returns the object at that address, plus objects it owns, plus objects it created. That is the useful set for the portal. It is not a line-by-line port of Sup's keyword walk for that method.
 12. Some `BUY` offer edges, and the culture-specific `DateTime` strings Sup writes into the change log, can differ from the C# program. Change dates in the API are UTC timestamps without a `Z`, close to Newtonsoft's `DateTime` JSON.
-13. `scriptPubKey.addresses` from Core 1.14 is read. A newer `address` field is also accepted if it is present.
+13. The fallback RPC path reads `scriptPubKey.addresses` from Core 1.14, and a single `address` field when a response has one. The default path parses pay-to-pubkey-hash, pay-to-script-hash, pay-to-pubkey, and the first key of a standard multisig out of the block hex. Any other script is treated as having no address, which drops the transaction, matching Sup when `addresses` is missing.
 14. Confirmations are `indexedHeight - blockHeight + 1` at read time, using this indexer's tip rather than a fresh RPC call on every object.

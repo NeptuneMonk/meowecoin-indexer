@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { Config } from '../config.ts';
 import { objectJson, profileJson, rootJson, type Store } from '../db/store.ts';
+import { roundRate, syncSnapshot } from '../indexer/progress.ts';
 import { keywordByPublicAddress, publicAddressByKeyword } from '../p2fk/keywords.ts';
 import type { BlockchainRpc } from '../rpc/client.ts';
 
@@ -55,6 +56,13 @@ async function health(rpc: BlockchainRpc, store: Store, config: Config): Promise
   }
   const waiting = nodeHeight !== null && nodeHeight < config.startHeight;
   const behind = nodeHeight === null || indexedHeight === null ? null : Math.max(0, nodeHeight - indexedHeight);
+  const meter = syncSnapshot();
+  const blocksPerSecond = behind !== null && behind > 0 ? roundRate(meter.blocksPerSecond) : behind === 0 ? 0 : null;
+  const averageBlocksPerSecond = roundRate(meter.averageBlocksPerSecond);
+  const etaSeconds =
+    behind !== null && behind > 0 && blocksPerSecond !== null && blocksPerSecond > 0
+      ? Math.round(behind / blocksPerSecond)
+      : null;
   return {
     ok: rpcError === null,
     chain: 'DOG',
@@ -63,6 +71,9 @@ async function health(rpc: BlockchainRpc, store: Store, config: Config): Promise
     indexedHeight,
     startHeight: config.startHeight,
     blocksBehind: behind,
+    blocksPerSecond,
+    averageBlocksPerSecond,
+    etaSeconds,
     waitingForStartHeight: waiting,
     rootCount: store.rootCount(),
     objectCount: store.objectCount(),

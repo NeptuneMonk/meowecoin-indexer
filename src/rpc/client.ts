@@ -15,6 +15,9 @@ export interface BlockchainRpc {
   getBlock(hash: string): Promise<BlockInfo>;
   getRawTransaction(txid: string): Promise<ChainTransaction>;
   verifyMessage(address: string, signature: string, message: string): Promise<boolean>;
+  /** Optional fast path. Dogecoin Core 1.14 can answer these in one HTTP batch. */
+  getBlockHashBatch?(heights: number[]): Promise<string[]>;
+  getBlockHexBatch?(hashes: string[]): Promise<string[]>;
 }
 
 interface RpcCall {
@@ -44,6 +47,19 @@ export class DogecoinRpc implements BlockchainRpc {
 
   async getBlockHash(height: number): Promise<string> {
     return String(await this.call('getblockhash', [height]));
+  }
+
+  async getBlockHashBatch(heights: number[]): Promise<string[]> {
+    if (heights.length === 0) return [];
+    const results = await this.batch(heights.map((height) => ({ method: 'getblockhash', params: [height] })));
+    return results.map((hash) => String(hash));
+  }
+
+  /** Raw block hex. Core 1.14 uses the boolean verbose flag, so false is the hex form. */
+  async getBlockHexBatch(hashes: string[]): Promise<string[]> {
+    if (hashes.length === 0) return [];
+    const results = await this.batch(hashes.map((hash) => ({ method: 'getblock', params: [hash, false] })));
+    return results.map((hex) => String(hex));
   }
 
   async getBlock(hash: string): Promise<BlockInfo> {

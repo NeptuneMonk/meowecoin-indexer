@@ -62,6 +62,15 @@ export function decimalToSats(value: string): bigint {
   return negative ? -sats : sats;
 }
 
+/** Same dust amounts as integer koinu, for the block parser's hot path. */
+export const DUST_SATS: ReadonlySet<bigint> = new Set(
+  [...DUST_VALUE_STRINGS].map((value) => decimalToSats(value)),
+);
+
+export function isPayloadSats(sats: bigint): boolean {
+  return DUST_SATS.has(sats);
+}
+
 /** JSON numbers from dogecoind are safe to round to koinu. */
 export function jsonCoinToSats(value: number | string): bigint {
   if (typeof value === 'string') {

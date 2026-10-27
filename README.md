@@ -94,10 +94,10 @@ cd meowecoin-indexer
 2. Open `.env` in Notepad.
 3. Set `DOGE_RPC_PASSWORD` to the same password you put in `dogecoin.conf`.
 4. Leave `DOGE_RPC_URL` as `http://host.docker.internal:22555` when you use Docker. That name means "the Windows PC, from inside Docker."
-5. Leave `START_HEIGHT=6400000` unless you know you need older records. That height is early October 2026. The program starts reading there and follows new blocks. Set `START_HEIGHT=0` only if you want the whole chain. That is slow.
+5. Leave `START_HEIGHT=0`. That is the first Dogecoin block, and it is the recommended value. The program reads from there to the newest block. Set a higher number only if you have a reason to skip older blocks.
 6. Save `.env`.
 
-Changing `START_HEIGHT` after the first successful run does nothing until you delete the `data` folder and start again.
+Changing `START_HEIGHT` after blocks have been saved does nothing until you delete the `data` folder and start again. If an older copy of this program was started at block 6400000, delete the `data` folder so this run starts at the first block.
 
 ## 5. Start it
 
@@ -132,8 +132,17 @@ You should see a page of JSON. These fields matter:
 | `nodeHeight` | The newest block Dogecoin has. |
 | `indexedHeight` | The newest block this program has read. It climbs toward `nodeHeight`. |
 | `blocksBehind` | How many blocks are still left. |
-| `waitingForStartHeight` | `true` only if Dogecoin is not synced up to `START_HEIGHT` yet. |
+| `blocksPerSecond` | How fast the last batch was read. `0` once it has caught up. |
+| `averageBlocksPerSecond` | The average speed since this start. |
+| `etaSeconds` | A rough guess of the remaining seconds, from the latest speed. It moves around. Empty until a speed is known. |
+| `waitingForStartHeight` | `true` only if Dogecoin is not synced up to `START_HEIGHT` yet. With the default `0`, this stays `false`. |
 | `rootCount` | How many P2FK records it has found. Zero is normal until it reaches a block that has one. |
+
+The first full sync reads every Dogecoin block. There are more than 6 million of them. Each block is read once, in batches, and the program keeps going until `indexedHeight` meets `nodeHeight`. It only pauses to wait for new blocks after that.
+
+Plan on many hours. On a laptop it can take a day or longer, because Dogecoin Core has to read each block from its own disk. This program does not ask for every transaction as a separate call, which would be much slower, but it still cannot skip blocks. The log prints the current height, the node height, and blocks per second about every couple of seconds while it is catching up. `/health` shows the same numbers.
+
+You can stop it in the middle. `docker compose down`, a restart, or closing the computer is safe. The next start continues from the last block saved in the `data` folder. Do not delete that folder if you want it to resume.
 
 To watch the log:
 
@@ -163,7 +172,7 @@ The later home for this is the mini PC. Dogecoin Core on that PC must also be **
 Two ways to bring the index:
 
 - Copy the `data` folder too. The program continues from the last block in that file. The Dogecoin node on the new PC must be able to serve those same blocks.
-- Or leave `data` behind. The program builds the index again from `START_HEIGHT`. That takes longer, and the result is the same.
+- Or leave `data` behind. The program builds the index again from `START_HEIGHT` (the first block, unless you changed it). That is the long first sync again.
 
 ## Run it without Docker
 
