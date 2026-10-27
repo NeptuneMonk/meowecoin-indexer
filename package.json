@@ -1,0 +1,15 @@
+{
+  "name": "meowecoin-doge-indexer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only Dogecoin P2FK indexer for Meowecoin profiles, objects, and ownership.",
+  "engines": {
+    "node": ">=22.14"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning --experimental-sqlite --experimental-strip-types src/index.ts",
+    "test": "node --disable-warning=ExperimentalWarning --experimental-sqlite --experimental-strip-types --test --test-reporter=spec test/*.test.ts",
+    "check:compose": "docker compose config"
+  }
+}
