@@ -2,7 +2,7 @@
 
 This service is a read-only Dogecoin indexer for Meowecoin P2FK records. One process scans the node and serves HTTP. There is no wallet and no private key.
 
-The record format is the one Sup uses on Bitcoin. Decoding follows those files. It is not a new format.
+The record format is P2FK (Pay to Future Key), the one Sup uses on Bitcoin. Decoding follows those files. It is not a new format.
 
 ## Sources followed
 
@@ -25,7 +25,7 @@ A real Bitcoin transaction checked the decoder: `e2a5e084e08c468f94c463211dd79b0
 
 ## Scan
 
-`src/indexer/scan.ts` asks the node for the tip, then reads blocks from `START_HEIGHT` (default `6400000`, early October 2026) up to the tip, `BATCH_BLOCKS` at a time (default 20). It sleeps `POLL_MS` (default 15 seconds) and repeats.
+`src/indexer/scan.ts` asks the node for the tip, then reads blocks from `START_HEIGHT` (default `0`, the first block) up to the tip, `BATCH_BLOCKS` at a time (default 20). It sleeps `POLL_MS` (default 15 seconds) and repeats.
 
 Confirmed blocks only. The mempool is not indexed.
 
@@ -33,7 +33,7 @@ Each block is saved only after every transaction in it has been decoded. A crash
 
 `txindex=1` is required. `getrawtransaction` must return transactions that are not in the wallet.
 
-Dogecoin Core **1.14.6** is required. Output order is the record. A newer Core reorders `sendmany` outputs and the payload no longer lines up.
+Dogecoin Core **1.14.6** is required, and only that version. Output order is the record. A newer Core reorders `sendmany` outputs and the payload no longer lines up.
 
 ## Reorgs
 
@@ -99,6 +99,10 @@ Creators and owners that are numbers in sample JSON are turned into strings so t
 
 A live object has a URN, at least one owner, and is not blocked.
 
+An object's address is its first creator address (`cre[0]`), which is the rule above. That address is also where the object's own chat is sent.
+
+**Spaces and channels.** These are ordinary objects. A Space has `lic` `meowe:space`. A channel has `lic` `meowe:space:channel` and `uri` set to its Space's object address. The indexer stores them like any other object and does not apply Space rules itself. The portal keeps only channels created by the Space's owner, and treats a give or sale of the Space as moving its channels with it. A Space is sold through `LST` and `BUY` like any store item.
+
 `src/p2fk/profileState.ts` replays `PRO` roots. The first claim is kept only when `SignedBy` is the profile address. One different creator moves the profile off the address and the old address is no longer live. PKX and PKY are stored. They are not used to decrypt anything.
 
 URN lookup follows Sup's object-by-URN rule: keyword address of the URN string, signed `OBJ` roots, try the second-to-last keyword and then the last, the object URN must match, owners must be non-empty, the first creator must be the candidate, and the change date must be inside 3 calendar years. Lookup by address does not use that window.
@@ -108,6 +112,8 @@ A previous-claim check in Sup looks at other chains when the version byte is not
 `ProcessHeight` is how many roots for that address have been applied, in chain order. It is not Sup's `searchrawtransactions` skip cursor.
 
 ## Messages
+
+Most portal messages and follows are not individual Dogecoin roots. They are paid in MEOWE on Solana, stored on IPFS, and covered by a periodic batch record (a Merkle root) written to Dogecoin. If that batch record is a P2FK root, it is stored here like any other root. This version has no route that checks a single message against a batch. The optional "Carve it on Doge" extra is the exception: it writes one message in full as its own root, which then appears below as a normal public message.
 
 Public messages are roots with a message packet. `From` is `SignedBy`. `To` is the second-to-last keyword, or the only keyword when there is one (`OBJ.GetPublicMessagesByAddress`).
 
@@ -119,7 +125,7 @@ Private messages are roots with a `SEC` file. Sup decrypts them with the profile
 
 SQLite, WAL mode, one file (`DB_PATH`, default `./data/meowecoin-indexer.sqlite`). Tables: `blocks`, `roots`, `root_outputs`, `objects`, `ownership`, `creators`, `profiles`, `transfers`, `messages`.
 
-Deleting the file and starting again rebuilds from `START_HEIGHT`. Lowering `START_HEIGHT` after blocks are saved does not walk backward. Delete the file first.
+Deleting the file and starting again rebuilds from `START_HEIGHT` (block 0 by default). Lowering `START_HEIGHT` after blocks are saved does not walk backward. Delete the file first.
 
 ## HTTP
 
@@ -138,7 +144,7 @@ These are the places this version does not claim to match Sup byte for byte, or 
 5. Object-by-URN uses Sup's 3-year change-date window. Address lookup does not.
 6. `max` is updated only when the JSON key is present. Sup's omitted `long` becomes 0.
 7. The mempool is not indexed. A record appears after it is in a block.
-8. Scanning from height 0 is a full chain read and is slow.
+8. Scanning from height 0 is a full chain read and is slow. The genesis block's coinbase transaction may not be returned by `getrawtransaction` (it is not in the transaction index on Bitcoin-derived nodes). This needs a test on a real 1.14.6 node before relying on `START_HEIGHT=0`.
 9. Dogecoin Core must stay on 1.14.6 so output order is stable.
 10. Duplicate 20-byte chunks cannot appear in one Sup transaction. A root with a repeated payload address is skipped.
 11. `GetObjectsByAddress` returns the object at that address, plus objects it owns, plus objects it created. That is the useful set for the portal. It is not a line-by-line port of Sup's keyword walk for that method.

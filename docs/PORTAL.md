@@ -55,6 +55,20 @@ One profile: `GET /GetProfileByAddress/{address}` or `GET /GetProfileByURN/{urn}
 
 `previewMeowe` is a portal shelf price. Do not invent one from this API. A listing's `Value` is only the amount written in the `LST` record. `art`, `localImageUrl`, `forgedHere`, `kind`, and `mainFileName` stay portal concerns. `mainFileName` should follow the file name inside `URN` when the URN has one.
 
+## Spaces and channels
+
+Spaces and channels come back as ordinary objects from the same search.
+
+| Portal | Indexer object |
+| --- | --- |
+| Space | `License` is `meowe:space`. Its address is the Space id |
+| Channel | `License` is `meowe:space:channel`. `URI` is the parent Space's address |
+| Channel belongs to the Space | Keep a channel only when its creator matches the Space's owner. This is the rule in the portal's `src/services/directory.ts` |
+| Space owner | An owner address from the Space's `Owners` |
+| Space or channel chat | `GET /GetPublicMessagesByAddress/{object address}` for messages carved to Dogecoin. Batched messages come from IPFS, not from this API |
+
+A give or sale of a Space shows up as a transfer on the Space object (`GetTransfersByObject`). The portal moves the Space's channels with it.
+
 Owned and created shelves:
 
 - `GET /GetObjectsOwnedByAddress/{address}?blockchain=DOG`
@@ -62,4 +76,4 @@ Owned and created shelves:
 
 ## What this API will not do for the portal
 
-It does not send transactions, hold keys, pin IPFS, price MEOWE, or run chat. Those stay on their own services in `createServices.ts`. Public chat in the portal plan is a daily Dogecoin fingerprint plus IPFS, which is separate from P2FK objects. If that fingerprint is later written as a P2FK root, it will show up here as a root. It is not given a special route in this version.
+It does not send transactions, hold keys, pin IPFS, price MEOWE, or run chat. Those stay on their own services in `createServices.ts`. In the portal plan, follows and messages are paid in MEOWE on Solana, stored on IPFS, and recorded to Dogecoin in a periodic batch record. That is separate from P2FK objects. If the batch record is written as a P2FK root, it will show up here as a root. It is not given a special route in this version.

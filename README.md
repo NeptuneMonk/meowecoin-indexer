@@ -1,8 +1,8 @@
 # Meowecoin Dogecoin indexer
 
-This program reads Dogecoin and writes down Meowecoin profiles, store items, and who owns them. It only reads. It has no wallet, no private keys, and it cannot send coins.
+This program reads Dogecoin and writes down Meowecoin profiles, store items, Spaces, channels, and who owns them. It reads every block, starting from the very first one (block 0). It only reads. It has no wallet, no private keys, and it cannot send coins.
 
-You need **Dogecoin Core 1.14.6**. Stay on that version. Newer Dogecoin Core shuffles the outputs of a `sendmany` payment, and that breaks these records.
+You need **Dogecoin Core 1.14.6**, and only that version. Newer Dogecoin Core shuffles the outputs of a `sendmany` payment, and that breaks these records.
 
 The index is one file on disk. If you delete it, the program builds it again from your Dogecoin node.
 
@@ -94,7 +94,7 @@ cd meowecoin-indexer
 2. Open `.env` in Notepad.
 3. Set `DOGE_RPC_PASSWORD` to the same password you put in `dogecoin.conf`.
 4. Leave `DOGE_RPC_URL` as `http://host.docker.internal:22555` when you use Docker. That name means "the Windows PC, from inside Docker."
-5. Leave `START_HEIGHT=6400000` unless you know you need older records. That height is early October 2026. The program starts reading there and follows new blocks. Set `START_HEIGHT=0` only if you want the whole chain. That is slow.
+5. Set `START_HEIGHT=0`. The program reads Dogecoin from the very first block, then keeps following new blocks. The first full read takes a long time. Leave the computer on until `blocksBehind` gets close to 0.
 6. Save `.env`.
 
 Changing `START_HEIGHT` after the first successful run does nothing until you delete the `data` folder and start again.
@@ -132,7 +132,7 @@ You should see a page of JSON. These fields matter:
 | `nodeHeight` | The newest block Dogecoin has. |
 | `indexedHeight` | The newest block this program has read. It climbs toward `nodeHeight`. |
 | `blocksBehind` | How many blocks are still left. |
-| `waitingForStartHeight` | `true` only if Dogecoin is not synced up to `START_HEIGHT` yet. |
+| `waitingForStartHeight` | `true` only if Dogecoin is not synced up to `START_HEIGHT` yet. With `START_HEIGHT=0` this is `false` once the node answers. |
 | `rootCount` | How many P2FK records it has found. Zero is normal until it reaches a block that has one. |
 
 To watch the log:
@@ -163,7 +163,7 @@ The later home for this is the mini PC. Dogecoin Core on that PC must also be **
 Two ways to bring the index:
 
 - Copy the `data` folder too. The program continues from the last block in that file. The Dogecoin node on the new PC must be able to serve those same blocks.
-- Or leave `data` behind. The program builds the index again from `START_HEIGHT`. That takes longer, and the result is the same.
+- Or leave `data` behind. The program builds the index again from `START_HEIGHT` (block 0). That takes much longer, and the result is the same.
 
 ## Run it without Docker
 
@@ -182,4 +182,4 @@ DOGE_RPC_URL=http://127.0.0.1:22555
 
 ## What it stores
 
-Profiles, objects, owners, gives, buys, burns, listings, public messages, and keywords, when the Dogecoin transaction is a Sup-style P2FK record. Details and the list of Sup files this follows are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The web addresses are in [docs/API.md](docs/API.md). How the Forge website will call this later is in [docs/PORTAL.md](docs/PORTAL.md).
+Profiles, objects (including Spaces and their channels), owners, gives, buys, burns, listings, public messages, and keywords, when the Dogecoin transaction is a Sup-style P2FK (Pay to Future Key) record. Follows and messages paid in MEOWE are recorded to Dogecoin in a periodic batch record; that record shows up here as a root, and the messages themselves are on IPFS. Details and the list of Sup files this follows are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The web addresses are in [docs/API.md](docs/API.md). How the Forge website will call this later is in [docs/PORTAL.md](docs/PORTAL.md).

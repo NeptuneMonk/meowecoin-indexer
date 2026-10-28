@@ -39,10 +39,10 @@ Message routes default to `qty=10`.
   "ok": true,
   "chain": "DOG",
   "versionByte": 30,
-  "nodeHeight": 6431700,
-  "indexedHeight": 6400100,
-  "startHeight": 6400000,
-  "blocksBehind": 31600,
+  "nodeHeight": "<node tip height>",
+  "indexedHeight": "<highest saved block>",
+  "startHeight": 0,
+  "blocksBehind": "<nodeHeight minus indexedHeight>",
   "waitingForStartHeight": false,
   "rootCount": 0,
   "objectCount": 0,
@@ -52,6 +52,8 @@ Message routes default to `qty=10`.
   "rpcError": null
 }
 ```
+
+Values in angle brackets are placeholders. The real response has numbers there.
 
 `ok` is false and `rpc` is `"error"` when the node does not answer. `rpcError` is the message. `indexedHeight` is null until the first block is saved.
 
@@ -191,11 +193,11 @@ Same paging rules as objects. The match covers URN, display name, and bio.
   "Signature": "base64",
   "Signed": true,
   "TransactionId": "hex",
-  "BlockDate": "2026-10-27T00:00:00",
-  "BlockHeight": 6400100,
+  "BlockDate": "<block date, UTC>",
+  "BlockHeight": "<block height>",
   "TotalByteSize": 250,
   "Confirmations": 12,
-  "BuildDate": "2026-10-27T12:00:00.000Z",
+  "BuildDate": "<time this root was decoded, UTC>",
   "Cached": true
 }
 ```
@@ -215,8 +217,8 @@ Same paging rules as objects. The match covers URN, display name, and bio.
     "fromAddress": "DFrom",
     "toAddress": "DTo",
     "message": "minted on doge",
-    "blockTime": 1761523200,
-    "height": 6400101,
+    "blockTime": "<block time, unix seconds>",
+    "height": "<block height>",
     "private": false,
     "files": { "SIG": 88, "OBJ": 40 }
   }
@@ -236,8 +238,8 @@ Private rows have `"private": true` and `"message": "<UNABLE TO DECRYPT>"`.
     "from_address": "",
     "to_address": "DOwner",
     "qty": 2,
-    "height": 6400101,
-    "block_time": 1761523200
+    "height": "<block height>",
+    "block_time": "<block time, unix seconds>"
   }
 ]
 ```
